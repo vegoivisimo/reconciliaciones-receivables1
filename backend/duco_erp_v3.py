@@ -205,7 +205,21 @@ class ReconciliadorService:
         )
         return candidates
 
+    _SAP_MERGE_COLS = [
+        "ESTR_ID", "Abs_Amount", "Curr", "Date", "Semantic_Text", "Semantic_Tokens",
+        "Riferimento", "Numero documento", "Importo in divisa docum.",
+        "Divisa documento", "Data pagamento", "Testo",
+    ]
+    _BNK_MERGE_COLS = [
+        "DUCO_ID", "Abs_Amount", "Curr", "Date", "Semantic_Text", "Semantic_Tokens",
+        "Amount", "BookDate", "Theirreference1", "Bookingtext1", "Comments",
+        "CommentsClearers", "Ourreference1", "Comment",
+        "ID", "Id", "id", "ItemId", "Item ID", "StmtN", "GIn", "GIN",
+    ]
+
     def _pair_candidates(self, sap_df: pd.DataFrame, bnk_df: pd.DataFrame) -> pd.DataFrame:
+        sap_df = sap_df[[c for c in self._SAP_MERGE_COLS if c in sap_df.columns]]
+        bnk_df = bnk_df[[c for c in self._BNK_MERGE_COLS if c in bnk_df.columns]]
         results = []
         for curr in sap_df["Curr"].unique():
             sap_curr = sap_df[sap_df["Curr"] == curr]
@@ -365,6 +379,8 @@ class ReconciliadorService:
     def _phase_grouped_many_to_one(self, sap_df: pd.DataFrame, bnk_df: pd.DataFrame) -> pd.DataFrame:
         if sap_df.empty or bnk_df.empty:
             return pd.DataFrame()
+
+        bnk_df = bnk_df[[c for c in self._BNK_MERGE_COLS if c in bnk_df.columns]]
 
         grouped = sap_df.groupby(["Date", "Curr", "Riferimento"], as_index=False).agg(
             {
