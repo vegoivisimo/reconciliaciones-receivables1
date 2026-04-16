@@ -1,9 +1,13 @@
 import base64
 import io
+import logging
+import traceback
 from typing import List, Tuple
 
 import pandas as pd
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+
+logger = logging.getLogger(__name__)
 
 from duco_erp_v3 import ReconciliadorService, df_to_records
 from duco_sap_agent import generate_duco_sap_ai_summary
@@ -193,6 +197,9 @@ async def upload_files(
         }
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("reconcile error: %s\n%s", exc, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 @router.post("/duco-sap/ai-summary", summary="Genera resumen ejecutivo IA para DUCO-SAP")
