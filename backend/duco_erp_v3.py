@@ -206,9 +206,39 @@ class ReconciliadorService:
         return candidates
 
     def _pair_candidates(self, sap_df: pd.DataFrame, bnk_df: pd.DataFrame) -> pd.DataFrame:
-        cand = pd.merge(sap_df, bnk_df, on=["Curr"], how="inner", suffixes=("_sap", "_bnk"))
-        cand = self._filter_candidate_window(cand)
-        return self._add_candidate_scores(cand)
+        results = []
+        for curr in sap_df["Curr"].unique():
+            sap_curr = sap_df[sap_df["Curr"] == curr]
+            bnk_curr = bnk_df[bnk_df["Curr"] == curr]
+            if sap_curr.empty or bnk_curr.empty:
+                continue
+            max_tol = max(
+                self.amount_tolerance,
+                float(sap_curr["Abs_Amount"].max()) * self.amount_tolerance_pct / 100.0,
+            )
+            lo = float(sap_curr["Abs_Amount"].min()) - max_tol
+            hi = float(sap_curr["Abs_Amount"].max()) + max_tol
+            bnk_curr = bnk_curr[bnk_curr["Abs_Amount"].between(lo, hi)]
+            if bnk_curr.empty:
+                continue
+            min_sap_date = sap_curr["Date"].min()
+            if pd.notna(min_sap_date):
+                max_sap_date = sap_curr["Date"].max()
+                delta = pd.Timedelta(days=self.tolerance_days)
+                bnk_curr = bnk_curr[
+                    bnk_curr["Date"].isna()
+                    | bnk_curr["Date"].between(min_sap_date - delta, max_sap_date + delta)
+                ]
+            if bnk_curr.empty:
+                continue
+            cand = pd.merge(sap_curr, bnk_curr, on=["Curr"], how="inner", suffixes=("_sap", "_bnk"))
+            cand = self._filter_candidate_window(cand)
+            cand = self._add_candidate_scores(cand)
+            if not cand.empty:
+                results.append(cand)
+        if not results:
+            return pd.DataFrame()
+        return pd.concat(results, ignore_index=True, sort=False)
 
     def _resolve_candidates_greedily(
         self,
