@@ -378,9 +378,39 @@ class ReconciliadorService:
         )
         grouped["GROUP_ID"] = grouped.index.astype(str) + "_grp"
 
-        cand = pd.merge(grouped, bnk_df, on=["Curr"], how="inner", suffixes=("_sap", "_bnk"))
-        cand = self._filter_candidate_window(cand)
-        cand = self._add_candidate_scores(cand)
+        partial = []
+        for curr in grouped["Curr"].unique():
+            grp_curr = grouped[grouped["Curr"] == curr]
+            bnk_curr = bnk_df[bnk_df["Curr"] == curr]
+            if grp_curr.empty or bnk_curr.empty:
+                continue
+            max_tol = max(
+                self.amount_tolerance,
+                float(grp_curr["Abs_Amount"].max()) * self.amount_tolerance_pct / 100.0,
+            )
+            lo = float(grp_curr["Abs_Amount"].min()) - max_tol
+            hi = float(grp_curr["Abs_Amount"].max()) + max_tol
+            bnk_curr = bnk_curr[bnk_curr["Abs_Amount"].between(lo, hi)]
+            if bnk_curr.empty:
+                continue
+            min_grp_date = grp_curr["Date"].min()
+            if pd.notna(min_grp_date):
+                max_grp_date = grp_curr["Date"].max()
+                delta = pd.Timedelta(days=self.tolerance_days)
+                bnk_curr = bnk_curr[
+                    bnk_curr["Date"].isna()
+                    | bnk_curr["Date"].between(min_grp_date - delta, max_grp_date + delta)
+                ]
+            if bnk_curr.empty:
+                continue
+            chunk = pd.merge(grp_curr, bnk_curr, on=["Curr"], how="inner", suffixes=("_sap", "_bnk"))
+            chunk = self._filter_candidate_window(chunk)
+            chunk = self._add_candidate_scores(chunk)
+            if not chunk.empty:
+                partial.append(chunk)
+        if not partial:
+            return pd.DataFrame()
+        cand = pd.concat(partial, ignore_index=True, sort=False)
         cand = cand[cand["semantic_score"] > 0].copy() if not cand.empty else cand
         if cand.empty:
             return pd.DataFrame()
