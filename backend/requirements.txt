@@ -1,0 +1,14 @@
+pandas
+numpy
+fastapi
+uvicorn
+python-multipart
+openpyxl
+xlsxwriter
+pydantic
+python-dateutil
+
+openai>=1.30.0
+python-dotenv>=1.0.0
+rapidfuzz>=3.0.0
+requests
